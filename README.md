@@ -1,4 +1,4 @@
-# VaccineNotifier 🇮
+# VaccineNotifier  🇮🇳
 VaccineNotifier checks the cowin portal to find vaccination slots available in your pin code and for your age. If found, it will send you an email with all found available slot details.
 
 Step 1) Enable application access on your gmail with steps given here:
