@@ -15,20 +15,36 @@ To close the app, run: pm2 stop vaccineNotifier.js && pm2 delete vaccineNotifier
 const PINCODE = process.env.PINCODE
 const EMAIL = process.env.EMAIL
 const AGE = process.env.AGE
+const IS_FREE = true;
+
+// SO - https://stackoverflow.com/a/31102605/12339402
+function sortObjectByKeys(object) {
+	return Object.keys(object).sort().reduce(
+		(obj,key) => {
+			obj[key] = object[key];
+			return obj;
+		},
+		{}
+	);
+}
 
 // This needs to be run every minute
 async function main(){
    return checkAvailability().then(slots => {
-	console.log("The following slots are available: ", slots);
-	const dates = Object.keys(slots).sort();
-	console.log("For dates: ", dates.join(', '));
-	// mail in batch here
+	slots = sortObjectByKeys(slots);
+	if(slots) {
+		console.log("The following slots are available: ", slots);
+		console.log("For dates: ", Object.keys(slots).join(', '));
+		// mail in batch here
+		notifyMe(slots);
+	} else {
+		console.log(`No ${IS_FREE ? "free": ""} vaccine available`);
+	}
    });
 }
 
 function checkAvailability() {
-    let datesArray = fetchNDays(3);
-	console.log(datesArray.length, datesArray);
+    let datesArray = fetchNDays(5);
     let slots = {};
     let indices_checked = 0;
     return new Promise((resolve) => {
@@ -56,12 +72,9 @@ function getSlotsForDate(DATE) {
         	}
     	}).then(res => res.json())
 	.then(slots => {
-            	let sessions = slots.sessions;
-            	let validSlots = sessions.filter(slot => slot.min_age_limit <= AGE &&  slot.available_capacity > 0)
+            	let validSlots = slots.sessions.filter(slot => (slot.fee_type != 'Paid' || !IS_FREE) && slot.min_age_limit <= AGE &&  slot.available_capacity > 0)
             	console.log({date:DATE, validSlots: validSlots.length})
-           	if(validSlots.length > 0) {
-                	// notifyMe(validSlots);
-		}
+
 		return validSlots;
         })
         .catch( error => {
@@ -70,9 +83,10 @@ function getSlotsForDate(DATE) {
 	})
 }
 
-async function notifyMe(validSlots){
-    let slotDetails = JSON.stringify(validSlots, null, '\t');
-    notifier.sendEmail(EMAIL, 'VACCINE AVAILABLE', slotDetails, (err, result) => {
+async function notifyMe(slots){
+    let slotDetails = JSON.stringify(slots, null, '\t');
+    const dates = Object.keys(slots).sort().map(s => s.substr()).join(', ');
+    notifier.sendEmail(EMAIL, 'VACCINE AVAILABLE - ' + dates, slotDetails, (err, result) => {
         if(err) {
             console.error({err});
         }
