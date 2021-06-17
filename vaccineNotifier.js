@@ -16,6 +16,7 @@ const PINCODE = process.env.PINCODE
 const EMAIL = process.env.EMAIL
 const AGE = process.env.AGE
 const IS_FREE = true;
+const IS_DOSE_1 = true;
 
 // SO - https://stackoverflow.com/a/31102605/12339402
 function sortObjectByKeys(object) {
@@ -30,13 +31,13 @@ function sortObjectByKeys(object) {
 
 // This needs to be run every minute
 async function main(){
-   return checkAvailability().then(slots => {
+   return checkAvailability().then((slots,centers) => {
 	slots = sortObjectByKeys(slots);
-	if(slots) {
+	if(Object.keys(slots).length !== 0) {
 		console.log("The following slots are available: ", slots);
 		console.log("For dates: ", Object.keys(slots).join(', '));
 		// mail in batch here
-		notifyMe(slots);
+		notifyMe({slots, centers});
 	} else {
 		console.log(`No ${IS_FREE ? "free": ""} vaccine available`);
 	}
@@ -44,40 +45,78 @@ async function main(){
 }
 
 function checkAvailability() {
-    let datesArray = fetchNDays(5);
+    let weekStartDays = fetchNWeeks(2);
     let slots = {};
+    let all_available_centers = [];
     let indices_checked = 0;
     return new Promise((resolve) => {
-	datesArray.forEach(async (date,i) => {
-        	const valid_slots = await getSlotsForDate(date);
-		if( valid_slots.length > 0 ) {
-			slots[date] = valid_slots;
-		}
+	weekStartDays.forEach(async (date,i) => {
+        	const availableCentres = await getWeekSessionsAfterDate(date);
+		
+		all_available_centers = [...availableCentres];
+		availableCentres.forEach( center => {
+			for( let date of center.dates ) {
+				if (slots[date] === undefined) {
+					slots[date] = [ center ];
+				}
+				else slots[date] = [center, ...slots[date] ];
+			}
+		})
 
 		indices_checked += 1;
-		if( indices_checked === datesArray.length ) {
-			resolve(slots);
+		if( indices_checked === weekStartDays.length ) {
+			resolve({slots, all_available_centers});
 		}
     	});
     });
 }
 
-function getSlotsForDate(DATE) {
-    const url = 'https://cdn-api.co-vin.in/api/v2/appointment/sessions/public/findByPin?pincode=' + PINCODE + '&date=' + DATE;
+function getWeekSessionsAfterDate(DATE) {
+    const url = 'https://cdn-api.co-vin.in/api/v2/appointment/sessions/public/calendarByPin?pincode=' + PINCODE + '&date=' + DATE;
 
 	return fetch( url , {
 		headers: {
-            	'Accept': 'application/json',
-            	'Accept-Language': 'hi_IN'
+            	'accept': 'application/json'
         	}
-    	}).then(res => res.json())
-	.then(slots => {
+    	})
+	.then(res => res.json())
+		.then(data => {
+			//console.log(data);
+			//require("process").exit(0);
+			const centers = data['centers'];
+		let availableCentres = [];
+		for( const center of centers) {
+            		let validSessions = center.sessions.filter((session) => (
+				(session.fee_type != 'Paid' || !IS_FREE) &&
+				session.min_age_limit <= AGE &&
+				session.available_capacity > 0 &&
+				(IS_DOSE_1 ? (session.available_capacity_dose1 > 0): true)	// if IS_DOSE_1 is false, shows BOTH free AND paid vaccines
+			))
+			let center_obj = {
+				dates: validSessions.map(session => session.date),
+				name: center.name,
+				pincode: center.pincode,
+				from: center.from,
+				to: center.to,
+				validSessions
+			};
+			if(center_obj.dates.length !== 0) {
+				// available
+				
+				availableCentres.push(center_obj);
+			}
+            		// console.log({date:DATE, center: [center.name,center.pincode], duration: [center.from,center.to], validSessions: validSessions.length})
+		}
+
+		return availableCentres;
+        })
+/*	.then(slots => {
             	let validSlots = slots.sessions.filter(slot => (slot.fee_type != 'Paid' || !IS_FREE) && slot.min_age_limit <= AGE &&  slot.available_capacity > 0)
             	console.log({date:DATE, validSlots: validSlots.length})
 
 		return validSlots;
         })
-        .catch( error => {
+*/        .catch( error => {
         	console.error(error);
         	return [];
 	})
@@ -106,12 +145,12 @@ function getDateString(date) {	// DD-MM-YYYY
 	return str;
 }
 
-function fetchNDays(n){
+function fetchNWeeks(n){
     let dates = [];
     let today = new Date();
     for(let i = 0 ; i < n ; i ++ ){
         dates.push( getDateString(today) );
-	today.setDate(today.getDate() + 1);
+	today.setDate(today.getDate() + 7);
     }
     return dates;
 }

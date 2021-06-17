@@ -2,7 +2,7 @@
 VaccineNotifier checks the cowin portal to find vaccination slots available in your pin code and for your age. If found, it will send you an email with all found available slot details.
 
 Step 1) Enable application access on your gmail with steps given here:
-https://support.google.com/accounts/answer/185833?p=InvalidSecondFactor&visit_id=637554658548216477-2576856839&rd=1  
+https://support.google.com/accounts/answer/185833?p=InvalidSecondFactor&visit\_id=637554658548216477-2576856839&rd=1  
 \
 Step 2) Enter the details in the file .env, present in the same folder
 \
@@ -18,9 +18,11 @@ Here's a sample of the resultant emails:
 
 2. Free vaccine - Just change IS\_FREE to false, if you also want to look for paid vaccines. By default it looks for free vaccines
 
-3. NOT using node's cronjob and pm2. Since the API is severly limited now.
+3. Use weekly API instead of daily for 7 days, this ensures your IP doesn't get blocked : ), and you can request more times (also it will help keep the COWIN servers more responsive :D )
+
+4. NOT using node's cronjob and pm2. Since the API is severly limited now.
    You may run it manually, since it gives result for many days at a time
    Personally, I setup a cron-job on Linux, to run it daily.
 
-4. Minor dependency change - Removed axios (Replaced with node-fetch), moment, pm2, cronjob, node-cron dependencies
+5. Minor dependency change - Removed axios (Replaced with node-fetch), moment, pm2, cronjob, node-cron dependencies
 
